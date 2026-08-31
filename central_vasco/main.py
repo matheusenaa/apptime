@@ -17,15 +17,22 @@ def main(page: ft.Page):
     gerenciador_dados = bd.DBManager365()
     motor_jogo = md.RealMatchDay365()
 
-    # Áudio da torcida (com degradação graciosa quando não houver suporte)
+    # Áudio da torcida (com degradação graciosa quando não houver suporte).
+    # O controle só é criado e adicionado ao overlay sob demanda (no primeiro
+    # clique em "tocar"), nunca no startup com src vazio. Isso evita que um
+    # cliente web antigo/em cache (sem suporte a "Audio") quebre a tela vermelha
+    # "Unknown control: Audio" em toda renderização, preservando o recurso.
     audio_player = None
-    try:
-        from flet_audio import Audio as ControladorAudio
 
-        audio_player = ControladorAudio(src="", autoplay=False)
-        page.overlay.append(audio_player)
-    except Exception:
-        print("[Aviso] Áudio indisponível neste ambiente.")
+
+    def obter_audio():
+        nonlocal audio_player
+        if audio_player is None:
+            from flet_audio import Audio as ControladorAudio
+
+            audio_player = ControladorAudio(src="", autoplay=False)
+            page.overlay.append(audio_player)
+        return audio_player
 
     def notificar(mensagem, cor=None):
         page.snack_bar = ft.SnackBar(
@@ -36,24 +43,23 @@ def main(page: ft.Page):
         page.update()
 
     async def tocar_musica(url, titulo):
-        if audio_player:
-            try:
-                audio_player.src = url or ""
-                await audio_player.play()
-                notificar(f"🔊 Tocando agora: {titulo}")
-            except Exception:
-                notificar("Não foi possível reproduzir este áudio no momento.")
-        else:
+        try:
+            player = obter_audio()
+            player.src = url or ""
+            page.update()
+            await player.play()
+            notificar(f"🔊 Tocando agora: {titulo}")
+        except Exception:
             notificar(f"📖 Canto selecionado: {titulo} (áudio indisponível no momento)")
         page.update()
 
     async def parar_musica():
-        if audio_player:
-            try:
-                await audio_player.pause()
-                notificar("⏸️ Áudio pausado")
-            except Exception:
-                pass
+        try:
+            player = obter_audio()
+            await player.pause()
+            notificar("⏸️ Áudio pausado")
+        except Exception:
+            notificar("⏸️ Áudio pausado")
         page.update()
 
     def criar_handler_canto(url, titulo):
