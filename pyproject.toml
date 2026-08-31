@@ -1,0 +1,30 @@
+[project]
+name = "central-vasco"
+version = "1.1.0"
+description = "Vasco Hub 2026 — App oficial da torcida vascaína com notícias, match day, cantos, elenco e estatísticas históricas."
+requires-python = ">=3.10"
+dependencies = [
+    "flet~=0.86.5",
+    "flet-audio~=0.86.5",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[tool.flet]
+product = "Vasco Hub 2026"
+org = "com.centralvasco"
+bundle_id = "com.centralvasco.app"
+app.path = "central_vasco/main.py"
+
+[tool.flet.ios]
+# Build do IPA exige macOS com Xcode e uma conta de desenvolvedor Apple.
+# Preencha os valores abaixo e rode: flet build ipa
+# team_id = "0000000000"
+# provisioning_profile = "Nome do Perfil de Provisionamento"
+# signing_certificate = "Apple Distribution: Empresa (ID)"
+# export_method = "app-store"   # ou "development"
+# architectures = ["arm64"]
+
+[tool.flet.ios.info]
+NSAppTransportSecurity = '{"NSAllowsArbitraryLoads": true}'
+UIRequiredDeviceCapabilities = '["arm64"]'
