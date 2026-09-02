@@ -48,6 +48,11 @@ class PaginaSimulada:
     def update(self):
         self.atualizacoes += 1
 
+    def run_thread(self, fn):
+        # No teste não há thread real: executa de forma síncrona para que o
+        # refresh em segundo plano do feed seja determinístico.
+        fn()
+
     def launch_url(self, url):
         self.lancamentos.append(url)
 
@@ -319,6 +324,79 @@ class TesteInterface(unittest.TestCase):
         pagina.navigation_bar.on_change(evento_tab)
         textos = _coletar_textos(pagina.adicionados[0].content)
         self.assertTrue(any("PRÓXIMA PARTIDA" in t for t in textos))
+
+    @mock.patch("match_day.RealMatchDay365.coletar_dados_ao_vivo",
+                return_value={"placar_vasco": 3, "placar_adv": 1,
+                              "adversario": "Cruzeiro", "estatisticas": {},
+                              "escalacao": [], "lances": []})
+    @mock.patch("banco_dados.src.obter_noticias_completas",
+                return_value={"ultimas": []})
+    def test_aba_elenco_responsiva_sem_gridview(self, *_patches):
+        """A aba Mais usa grade responsiva (ResponsiveRow) no lugar do
+        GridView com altura ilimitada, que falhava no CanvasKit do iPhone."""
+        import main as app
+        pagina = PaginaSimulada()
+        app.main(pagina)
+
+        evento_tab = EventoSimulado(ControleSimulado(selected_index=4))
+        pagina.navigation_bar.on_change(evento_tab)
+
+        conteudo = pagina.adicionados[0].content
+        responsivos = _contar_por_tipo(conteudo, "ResponsiveRow")
+        gridviews = _contar_por_tipo(conteudo, "GridView")
+        self.assertGreater(responsivos, 0,
+                           "Elenco deveria usar ResponsiveRow (grade responsiva)")
+        self.assertEqual(gridviews, 0,
+                         "Elenco não deveria mais usar GridView no mobile")
+        textos = _coletar_textos(conteudo)
+        self.assertTrue(any("Elenco Oficial" in t for t in textos))
+        self.assertTrue(any("Léo Jardim" in t for t in textos))
+
+    @mock.patch("match_day.RealMatchDay365.coletar_dados_ao_vivo",
+                return_value={"placar_vasco": 3, "placar_adv": 1,
+                              "adversario": "Cruzeiro", "estatisticas": {},
+                              "escalacao": [], "lances": []})
+    @mock.patch("banco_dados.src.obter_noticias_completas",
+                return_value={"ultimas": [
+                    {"titulo": "Vasco treina forte para o clássico",
+                     "fonte": "GE", "url": "https://ge.globo.com",
+                     "categoria": "ultimas"}]})
+    def test_feed_noticias_nao_trava_primeiro_desenho(self, *_patches):
+        """O primeiro desenho do feed lê o cache local (offline) sem bloquear
+        na rede; o refresh em segundo plano é que busca a internet."""
+        import main as app
+        pagina = PaginaSimulada()
+        # Com run_thread síncrono no mock, o refresh da rede roda durante o
+        # main(); nada deve quebrar e a notícia 'vinda da internet' aparece.
+        app.main(pagina)
+        conteudo = pagina.adicionados[0].content
+        textos = _coletar_textos(conteudo)
+        self.assertTrue(any("Vasco treina forte" in t for t in textos))
+
+
+def _contar_por_tipo(controle, nome_tipo, vistos=None):
+    """Conta quantos controles de um dado tipo existem na árvore."""
+    if vistos is None:
+        vistos = set()
+    oid = id(controle)
+    if oid in vistos:
+        return 0
+    vistos.add(oid)
+    total = 1 if type(controle).__name__ == nome_tipo else 0
+    objetos = list(vars(controle).values()) if hasattr(controle, "__dict__") else []
+    valores_internos = getattr(controle, "_values", None)
+    if isinstance(valores_internos, dict):
+        objetos.extend(valores_internos.values())
+    for objeto in objetos:
+        if objeto is None or isinstance(objeto, (str, int, float, bool)):
+            continue
+        if isinstance(objeto, (list, tuple)):
+            for item in objeto:
+                if item is not None and not isinstance(item, (str, int, float, bool)):
+                    total += _contar_por_tipo(item, nome_tipo, vistos)
+        elif hasattr(objeto, "__dict__") or hasattr(objeto, "_values"):
+            total += _contar_por_tipo(objeto, nome_tipo, vistos)
+    return total
 
 
 if __name__ == "__main__":

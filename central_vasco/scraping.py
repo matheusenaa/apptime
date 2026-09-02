@@ -1,5 +1,8 @@
 import requests
+import logging
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 
 def obter_noticias_completas():
@@ -27,8 +30,8 @@ def obter_noticias_completas():
                 if link:
                     dados["ultimas"].append(
                         {"titulo": link.text.strip(), "fonte": "Globo Esporte", "url": link['href']})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Erro na raspagem do GE: {e}")
 
     # 2. Raspagem da NetVasco (Fatos Rápidos e Contratações)
     try:
@@ -40,8 +43,8 @@ def obter_noticias_completas():
                 texto = t.text.strip()
                 if "Vasco" in texto and len(texto) > 30:
                     dados["ultimas"].append({"titulo": texto, "fonte": "NetVasco", "url": t.get('href', '')})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Erro na raspagem da NetVasco: {e}")
 
     # 3. Raspagem do Site Oficial (Entrevistas Coletivas e Notas Oficiais)
     try:
@@ -53,8 +56,8 @@ def obter_noticias_completas():
                 if txt:
                     dados["entrevistas"].append(
                         {"titulo": txt, "fonte": "Vasco Oficial", "url": "https://vasco.com.br/"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Erro na raspagem do Site Oficial: {e}")
 
     # Fallback de segurança se as raspagens falharem simultaneamente
     if not dados["ultimas"]:
@@ -70,16 +73,23 @@ def obter_noticias_completas():
 
 
 def obter_elenco_completo():
-    """Retorna os atletas do elenco profissional do Vasco com fotos e números reais."""
+    """Retorna os atletas do elenco profissional do Vasco com foto sempre vazia.
+
+    As URLs de foto anteriormente apontavam para "https://globo.com" (que não é
+    uma imagem), o que gerava avatares quebrados/carregamentos de rede inúteis
+    no iPhone e Android. Como o app não possui assets locais de fotos, o campo
+    "foto" agora fica vazio e a interface exibe a inicial do atleta num avatar
+    local (sem rede).
+    """
     return [
-        {"num": "1", "nome": "Léo Jardim", "pos": "Goleiro", "foto": "https://globo.com"},
-        {"num": "96", "nome": "Paulo Henrique", "pos": "Lateral Direito", "foto": "https://globo.com"},
-        {"num": "46", "nome": "Carlos Cuesta", "pos": "Zagueiro", "foto": "https://globo.com"},
-        {"num": "6", "nome": "Lucas Piton", "pos": "Lateral Esquerdo", "foto": "https://globo.com"},
-        {"num": "5", "nome": "Santiago Sosa", "pos": "Volante", "foto": "https://globo.com"},
-        {"num": "10", "nome": "Philippe Coutinho", "pos": "Meio-Campo", "foto": "https://globo.com"},
-        {"num": "9", "nome": "Facundo Colidio", "pos": "Atacante", "foto": "https://globo.com"},
-        {"num": "28", "nome": "Adson", "pos": "Atacante", "foto": "https://globo.com"}
+        {"num": "1", "nome": "Léo Jardim", "pos": "Goleiro", "foto": ""},
+        {"num": "96", "nome": "Paulo Henrique", "pos": "Lateral Direito", "foto": ""},
+        {"num": "46", "nome": "Carlos Cuesta", "pos": "Zagueiro", "foto": ""},
+        {"num": "6", "nome": "Lucas Piton", "pos": "Lateral Esquerdo", "foto": ""},
+        {"num": "5", "nome": "Santiago Sosa", "pos": "Volante", "foto": ""},
+        {"num": "10", "nome": "Philippe Coutinho", "pos": "Meio-Campo", "foto": ""},
+        {"num": "9", "nome": "Facundo Colidio", "pos": "Atacante", "foto": ""},
+        {"num": "28", "nome": "Adson", "pos": "Atacante", "foto": ""}
     ]
 
 def obter_galeria_trofeus():
@@ -144,17 +154,17 @@ def obter_uniformes_2026():
         {
             "tipo": "Uniforme 1 - Home (Tradicional)",
             "detalhes": "Camisa preta tradicional com a mítica faixa diagonal branca, gola polo texturizada.",
-            "imagem": "https://globo.com"
+            "imagem": ""
         },
         {
             "tipo": "Uniforme 2 - Away (Visitante)",
             "detalhes": "Branca com a faixa diagonal preta, detalhes minimalistas nos punhos das mangas.",
-            "imagem": "https://globo.com"
+            "imagem": ""
         },
         {
             "tipo": "Uniforme 3 - Alternativo Especial (Velas das Naus)",
             "detalhes": "Totalmente amarela pálida sem faixa diagonal, homenageando as caravelas históricas com detalhes pretos e a Cruz de Malta em destaque vermelho intenso no peito.",
-            "imagem": "https://globo.com"
+            "imagem": ""
         }
     ]
 def obter_playlist_torcida():

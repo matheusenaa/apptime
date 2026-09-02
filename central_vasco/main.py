@@ -1,4 +1,8 @@
 import flet as ft
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
 
 import banco_dados as bd
 import historico
@@ -87,13 +91,11 @@ def main(page: ft.Page):
             notificar("Não foi possível abrir o link no navegador.")
 
     # ABA 1 — FEED DE NOTÍCIAS
-    def render_noticias_bastidores():
-        lista = ft.ListView(padding=12, expand=True, spacing=10)
-        try:
-            dados = gerenciador_dados.obter_noticias_hibrido()
-        except Exception:
-            dados = {"ultimas": [], "entrevistas": [], "bastidores": [], "online": False}
-
+    def preencher_noticias(lista, dados):
+        """Preenche um ListView com o conteúdo do feed de notícias (compartilhado
+        entre o primeiro desenho — sempre rápido/offline — e a atualização que
+        chega da internet em segundo plano)."""
+        lista.controls.clear()
         if not dados.get("online"):
             lista.controls.append(
                 ft.Container(
@@ -119,6 +121,35 @@ def main(page: ft.Page):
                                          size=11, color=tema.COR_TEXTO_SEC),
                         on_click=lambda _, u=url: abrir_link(u),
                     ), padding=4))
+
+    def refrescar_noticias_async(lista):
+        """Atualiza o feed em segundo plano (sem travar o primeiro desenho da
+        tela no iPhone/Android). Usa cache/offline primeiro; depois busca a rede."""
+        def trabalho():
+            try:
+                dados = gerenciador_dados.obter_noticias_hibrido(
+                    usar_rede=True, forcar_atualizacao=True)
+            except Exception as e:
+                logger.warning(f"Erro ao baixar notícias em background: {e}")
+                dados = None
+            if dados is not None:
+                preencher_noticias(lista, dados)
+                page.update()
+
+        try:
+            page.run_thread(trabalho)
+        except Exception:
+            # Fallback seguro para threading padrão que não trava a UI
+            threading.Thread(target=trabalho, daemon=True).start()
+
+    def render_noticias_bastidores():
+        lista = ft.ListView(padding=12, expand=True, spacing=10)
+        try:
+            dados = gerenciador_dados.obter_noticias_hibrido(usar_rede=False)
+        except Exception:
+            dados = {"ultimas": [], "entrevistas": [], "bastidores": [], "online": False}
+        preencher_noticias(lista, dados)
+        refrescar_noticias_async(lista)
         return lista
 
     # ABA 2 — MATCH DAY
@@ -165,7 +196,8 @@ def main(page: ft.Page):
         painel_tempo_real.controls.clear()
         try:
             dados_jogo = motor_jogo.coletar_dados_ao_vivo()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Erro ao coletar dados do MatchDay: {e}")
             dados_jogo = {}
 
         campo_pre_jogo = tema.card(
@@ -203,7 +235,7 @@ def main(page: ft.Page):
                 "Verifique sua conexão e sincronize novamente.",
                 icone=ft.Icons.WIFI_OFF))
 
-        painel_tempo_real.controls.append(ft.ElevatedButton(
+        painel_tempo_real.controls.append(ft.Button(
             "Sincronizar Placar Real",
             icon=ft.Icons.REFRESH,
             style=ft.ButtonStyle(bgcolor=tema.COR_TEXTO, color=ft.Colors.BLACK),
@@ -393,7 +425,10 @@ def main(page: ft.Page):
             valor = getattr(control, "value", None) or getattr(e, "data", None)
         valor = valor or seletor_campeonato.value or "brasileirao"
         seletor_campeonato.value = valor
-        conteudo_app.content = render_historico_completo()
+        
+        novo_conteudo = render_historico_completo()
+        cache_abas[3] = novo_conteudo
+        conteudo_app.content = novo_conteudo
         page.update()
 
     seletor_campeonato = ft.Dropdown(
@@ -442,16 +477,27 @@ def main(page: ft.Page):
             tema.divisoria(),
         ])
 
-        grid_atletas = ft.GridView(expand=False, runs_count=2, max_extent=180,
-                                   child_aspect_ratio=0.85, spacing=10)
+        # Elenco: grade responsiva e segura para web/mobile. Substitui o
+        # GridView com `expand=False` (que, dentro de uma Column com scroll,
+        # fica sem altura limitada e pode falhar ao renderizar no CanvasKit
+        # usado pelo iPhone/Safari) por um ResponsiveRow com alturas naturais.
+        grid_atletas = ft.ResponsiveRow(spacing=10, run_spacing=10)
         for j in src.obter_elenco_completo():
+            nome = j.get("nome") or "-"
+            inicial = (nome[0] if nome else "?")
             grid_atletas.controls.append(ft.Container(
+                col={"xs": 6, "sm": 4, "md": 3, "xl": 2},
                 content=ft.Column([
-                    ft.CircleAvatar(foreground_image_src=j.get("foto") or "", radius=32),
-                    ft.Text(j.get("nome") or "-", weight=ft.FontWeight.BOLD, size=13,
-                            overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.CircleAvatar(
+                        radius=28,
+                        bgcolor=tema.COR_VERMELHO_VASCO,
+                        content=ft.Text(inicial, size=20, weight=ft.FontWeight.BOLD,
+                                        color=ft.Colors.WHITE),
+                    ),
+                    ft.Text(nome, weight=ft.FontWeight.BOLD, size=13, max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS, text_align=ft.TextAlign.CENTER),
                     ft.Text(f"N° {j.get('num', '-')} - {j.get('pos', '-')}", size=11,
-                            color=tema.COR_TEXTO_SEC),
+                            color=tema.COR_TEXTO_SEC, text_align=ft.TextAlign.CENTER),
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=tema.COR_CARD, border_radius=10, padding=10,
                 border=ft.Border.all(1, tema.COR_BORDA)))
@@ -462,21 +508,31 @@ def main(page: ft.Page):
         return ft.Container(content=coluna, padding=12)
 
     # ESTRUTURA GLOBAL DE ABAS
-    conteudo_app = ft.Container(content=render_noticias_bastidores(), expand=True)
+    # Cache implementado (Lazy Loading): renderiza apenas na primeira visita
+    cache_abas = {
+        0: render_noticias_bastidores(),
+        1: None,
+        2: None,
+        3: None,
+        4: None,
+    }
+    
+    conteudo_app = ft.Container(content=cache_abas[0], expand=True)
 
     def alternar_aba(e):
         idx = e.control.selected_index
-        if idx == 0:
-            conteudo_app.content = render_noticias_bastidores()
-        elif idx == 1:
-            conteudo_app.content = painel_tempo_real
-            atualizar_painel_jogo()
-        elif idx == 2:
-            conteudo_app.content = render_playlist_torcida()
-        elif idx == 3:
-            conteudo_app.content = render_historico_completo()
-        elif idx == 4:
-            conteudo_app.content = render_elenco_config()
+        if cache_abas[idx] is None:
+            if idx == 1:
+                cache_abas[1] = painel_tempo_real
+                atualizar_painel_jogo()
+            elif idx == 2:
+                cache_abas[2] = render_playlist_torcida()
+            elif idx == 3:
+                cache_abas[3] = render_historico_completo()
+            elif idx == 4:
+                cache_abas[4] = render_elenco_config()
+                
+        conteudo_app.content = cache_abas[idx]
         page.update()
 
     page.navigation_bar = ft.NavigationBar(
@@ -504,4 +560,4 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)
