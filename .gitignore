@@ -10,3 +10,23 @@ build/
 .DS_Store
 dist/
 *.egg-info/
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+*.iml
+coverage/
+
+# Seguranca: nunca versionar credenciais/segredos
+.env
+.env.*
+*.env
+!.env.exemplo
+*.key
+*.pem
+secrets/
+

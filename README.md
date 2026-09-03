@@ -1,92 +1,127 @@
-# Vasco Hub 2026
+# App Time Vasco
 
-App da torcida vascaína construído com **Flet** (Python). Reúne notícias,
-placar ao vivo (match day), cantos da torcida, elenco e **estatísticas
-históricas** com dados reais e verificados.
+Aplicativo mobile do **Club de Regatas Vasco da Gama** para torcedores,
+reescrito em **Flutter** com Material 3, arquitetura limpa e dados reais de
+futebol. Acompanha jogos, classificação, elenco e o histórico do Gigante da
+Colina.
+
+> **Nota:** este repositório substituiu a base original em **Flet/Python**
+> por uma implementação Flutter (iOS/Android/Web-PWA). O código legado foi
+> preservado em [`legacy_python/`](legacy_python/) e num backup Git
+> (`tag original-flet-8beea6e`).
 
 ## Funcionalidades
 
 | Aba | Descrição |
 | --- | --- |
-| Notícias | Feed com as principais notícias do Vasco (online com cache SQLite offline) |
-| MatchDay | Card da próxima partida + dados ao vivo do jogo (placar, estatísticas, escalação e lances) |
-| Cantos | Playlist de cantos da bancada com reprodução de áudio (flet_audio) |
-| História | Estatísticas históricas do Brasileirão e da Copa do Brasil, com temporadas verificadas |
-| Mais | Elenco oficial e modo de economia de bateria (tema AMOLED) |
+| Início | Destaque do próximo jogo / jogo ao vivo + acesso rápido a Histórico e Notícias |
+| Jogos | Seção **AO VIVO** (atualização a cada 30s) e próximos jogos do Vasco |
+| Tabela | Classificação do **Brasileirão Série A** (dados reais) |
+| Elenco | Atletas do profissional carregados da API |
+| Mais | Notícias/Fatos, Configurações (tema + chave da API) e Sobre |
+
+Dados de futebol: **API-Football** (api-sports.io) — Brasileirão Série A,
+Copa do Brasil e placar ao vivo. Histórico do clube: dados verificados
+(Brasileirão 1974–2025 + Copa do Brasil).
+
+## Como configurar a chave da API
+
+1. Crie uma conta gratuita em [api-football.com](https://www.api-football.com)
+   (plano **Free**, 100 requisições/dia — suficiente para este app).
+2. Copie sua **API Key** do painel.
+3. Faça o build informando a chave (recomendado para release):
+
+   ```bash
+   flutter build web --dart-define=APIFOOTBALL_KEY=SUA_CHAVE_AQUI
+   ```
+
+   Ou, em desenvolvimento, edite o arquivo `.env` (modelo em
+   `.env.exemplo`) e rode `flutter run`.
+
+4. **Sem chave**, o app entra em **Modo Demonstração** (dados históricos e
+   institucionais, sem placares falsos).
+
+> **Segurança:** a chave fica em `.env` ou `--dart-define`, ambos fora do Git.
+> Nunca envie a chave para o repositório.
 
 ## Requisitos
 
-- Python 3.10+
-- Flet `~=0.86.5` (compatibilidade verificada com a versão 0.86.5)
-- flet-audio `~=0.86.5`
+- Flutter 3.32+ / Dart 3.12+ (desenvolvido com Flutter 3.44.8)
+- Para Android: Android SDK
+- Para iOS: macOS + Xcode (build do IPA)
 
 ## Como executar
 
 ```bash
-python -m venv .venv
-.\.venv\Scripts\activate        # Windows
-pip install -r requirements.txt
-
-python central_vasco\main.py    # abre na janela do desktop
+flutter pub get
+flutter run                 # dispositivo/emulador conectado
+flutter run -d chrome       # ou web (desenvolvimento)
 ```
 
-Para rodar em modo web (preview no navegador):
+## Build (PWA — testável no iPhone)
 
 ```bash
-flet run central_vasco\main.py --web --port 8550
+flutter build web
+```
+
+O diretório `build/web` é um PWA instalável (service worker + offline do
+app shell). Para servir na sua rede e abrir no iPhone:
+
+```bash
+cd build/web
+python -m http.server 8080 --bind 0.0.0.0
+```
+
+Acesse de outro dispositivo em `http://IP_DA_MAQUINA:8080`. No iPhone, toque
+em **Compartilhar → Adicionar à Tela de Início** para instalar como app.
+
+### Android
+
+```bash
+flutter build apk --release          # requer Android SDK
+```
+
+### iOS
+
+```bash
+flutter build ipa                     # necessário macOS + Xcode
 ```
 
 ## Testes
 
-A suíte usa um harness próprio (`central_vasco/testes.py`) com um `Page`
-simulado — não depende do `flet.testing` nem abre janelas, e realiza **zero
-requisições de rede**:
-
 ```bash
-python central_vasco\testes.py
+flutter test
 ```
 
-Os testes cobrem integridade dos dados históricos (V+E+D = total de jogos,
-aproveitamento dentro de 0–100%, resumos consistentes) e um smoke test da
-interface (carregamento, troca entre as 5 abas e alternância de campeonato).
+A suíte cobre parsing dos modelos (jogos ao vivo/agendado, classificação),
+integridade dos dados históricos e um smoke test da interface em modo
+demonstração (zero rede).
 
 ## Estrutura
 
 ```
-central_vasco/
-├── main.py        # App Flet: navegação e montagem das abas
-├── theme.py       # Identidade visual (preto/branco Vasco) e widgets
-├── historico.py   # Estatísticas históricas verificadas
-├── banco_dados.py # Cache híbrido notícias: internet + SQLite offline
-├── match_day.py   # Motor de dados ao vivo da partida
-├── scraping.py    # Coleta de notícias/cantos/elenco com fallback
-└── testes.py      # Suíte de testes (Page simulado)
+lib/
+├── main.dart                 # Bootstrap (dotenv, tema, provider)
+├── core/                     # constantes, tema, rede, formatação
+├── data/                     # histórico verificado + fatos do clube
+├── models/                   # Match, Standing, Player, NewsItem
+├── services/
+│   ├── api/                  # interface + API-Football + demo
+│   └── storage/              # preferências e cache local
+├── repositories/             # orquestração: API → cache → demo
+├── state/                    # AppState (ChangeNotifier) + polling
+├── screens/                  # Início, Jogos, Tabela, Elenco, Mais, ...
+└── widgets/                  # cartões, banners, tabela, esqueletos
+
+legacy_python/                # código Flet original (referência)
 ```
 
 ## Fontes dos dados históricos
 
-Todos os números em `historico.py` vêm de tabelas oficiais de cada edição
-(Wikipédia — tabela de classificação final —, CBF e site oficial). Campos sem
-fonte confiável são exibidos como *"Não disponível"*. Nenhum dado foi
-inventado. A temporada 2026 está em andamento e não entra no histórico.
-
-## Build para iPhone 12 Pro (iOS)
-
-O alvo iOS é o iPhone 12 Pro (arm64). O build do IPA precisa de **macOS com
-Xcode** e de uma conta de desenvolvedor Apple:
-
-1. Preencha `[tool.flet.ios]` em `pyproject.toml` (Apple `team_id`,
-   provisioning profile e certificado de assinatura).
-2. No macOS, dentro da pasta do projeto:
-
-   ```bash
-   flet build ipa
-   ```
-
-3. Instale o IPA via Xcode/Apple Configurator no iPhone 12 Pro.
-
-Os recursos usados pelo app (NavigationBar com 5 abas, GridView, áudio,
-cache local) são suportados pelo iOS no Flet 0.86.5.
+Todos os números em `lib/data/historical_data.dart` vêm de tabelas oficiais
+de cada edição (Wikipédia — classificação final —, CBF e site oficial).
+Campos sem fonte são exibidos como *"Não disponível"*. Nada foi inventado. A
+temporada 2026 está em andamento e não entra no histórico.
 
 ## Licença
 

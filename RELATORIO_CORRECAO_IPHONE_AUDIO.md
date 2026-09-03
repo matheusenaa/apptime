@@ -1,5 +1,14 @@
 # RELATÓRIO — Correção do erro "Unknown control: Audio" no iPhone (Vasco Hub 2026)
 
+**PROJETO MIGRADO PARA FLUTTER (03/09/2026):** este relatório documenta a
+correção feita ainda na versão Flet/Python. A solução definitiva foi a
+**migração para Flutter** (o `flet_audio` não existe no Flutter, eliminando o
+erro "Unknown control: Audio" por completo). Ver
+[`RELATORIO_MIGRACAO_FLUTTER.md`](RELATORIO_MIGRACAO_FLUTTER.md). O conteúdo
+abaixo é mantido como registro histórico.
+
+---
+
 **Projeto:** `apptime` — Vasco Hub 2026 (Flet)
 **Data:** 31/08/2026
 **Ambiente:** Windows / PowerShell, Python 3.12.10, Flet 0.86.5
