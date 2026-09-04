@@ -4,15 +4,19 @@ Guia para agentes trabalhando neste repositório (App Time Vasco em Flutter).
 
 ## Ferramentas
 
-- Flutter/Dart **não estão no PATH global**. Use o caminho completo:
+- Flutter/Dart **não estão no PATH global** por padrão em todas as máquinas.
+  Nesta máquina (`matheus.silva`), o SDK está em:
+  `C:\Users\matheus.silva\flutter\3.44.8\bin` (adicionado ao PATH do usuário).
+
+  Para usar em qualquer máquina, localize o SDK ou use o caminho completo:
 
   ```bash
-  C:\Users\mmath\flutter\3.44.8\bin\flutter.bat
+  C:\Users\matheus.silva\flutter\3.44.8\bin\flutter.bat
   ```
 
 - Nesta máquina **não há Android SDK nem macOS/Xcode** → só é possível
-  compilar para **Web/PWA** (`flutter build web`) e Windows (sem VS). Não
-  tente `flutter build apk`/`ipa` aqui.
+  compilar para **Web/PWA** (`flutter build web`). Não tente
+  `flutter build apk`/`ipa` aqui.
 
 ## Comandos padrão
 
